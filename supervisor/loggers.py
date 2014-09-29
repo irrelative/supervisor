@@ -7,9 +7,11 @@ idiosyncratic and a bit slow for our purposes (we don't use threads).
 # This module must not depend on any non-stdlib modules to
 # avoid circular import problems
 
+import gzip
 import os
 import errno
 import sys
+import tempfile
 import time
 import traceback
 
@@ -151,7 +153,7 @@ class BoundIO:
 
 class RotatingFileHandler(FileHandler):
     def __init__(self, filename, mode='a', maxBytes=512*1024*1024,
-                 backupCount=10):
+                 backupCount=10, compressed_rotation=False):
         """
         Open the specified file and use it as the stream for logging.
 
@@ -180,6 +182,9 @@ class RotatingFileHandler(FileHandler):
         self.backupCount = backupCount
         self.counter = 0
         self.every = 10
+        record = LogRecord(20, 'compressed_rotation: %s' % compressed_rotation)
+        self.emit(record)
+        self.compressed_rotation = compressed_rotation
 
     def __del__(self):
         if self.stream:
@@ -210,7 +215,7 @@ class RotatingFileHandler(FileHandler):
         # this is here to service stubbing in unit tests
         return os.path.exists(fn)
 
-    def removeAndRename(self, sfn, dfn):
+    def removeAndRename(self, sfn, dfn, compress=False):
         if self._exists(dfn):
             try:
                 self._remove(dfn)
@@ -218,6 +223,12 @@ class RotatingFileHandler(FileHandler):
                 # catch race condition (destination already deleted)
                 if why.args[0] != errno.ENOENT:
                     raise
+        if compress:
+            # compress dfn, which already has .gz extension
+            tfile = tempfile.NamedTemporaryFile(suffix='gz', delete=False)
+            with open(sfn) as sfile, gzip.open(tfile.name, 'wb') as zfile:
+                zfile.writelines(sfile)
+            self._rename(tfile.name, sfn)
         try:
             self._rename(sfn, dfn)
         except OSError as why:
@@ -225,6 +236,12 @@ class RotatingFileHandler(FileHandler):
             # E.g. cleanup script removes active log.
             if why.args[0] != errno.ENOENT:
                 raise
+
+    def rollover_filename(self, i):
+        fn = "%s.%d" % (self.baseFilename, i)
+        if self.compressed_rotation:
+            fn += '.gz'
+        return fn
 
     def doRollover(self):
         """
@@ -239,12 +256,13 @@ class RotatingFileHandler(FileHandler):
         self.stream.close()
         if self.backupCount > 0:
             for i in range(self.backupCount - 1, 0, -1):
-                sfn = "%s.%d" % (self.baseFilename, i)
-                dfn = "%s.%d" % (self.baseFilename, i + 1)
+                sfn = self.rollover_filename(i)
+                dfn = self.rollover_filename(i + 1)
                 if os.path.exists(sfn):
                     self.removeAndRename(sfn, dfn)
-            dfn = self.baseFilename + ".1"
-            self.removeAndRename(self.baseFilename, dfn)
+            dfn = self.rollover_filename(1)
+            self.removeAndRename(self.baseFilename, dfn,
+                                 compress=self.compressed_rotation)
         self.stream = open(self.baseFilename, 'w')
 
 class LogRecord:
@@ -379,7 +397,8 @@ def handle_syslog(logger, fmt):
     handler.setLevel(logger.level)
     logger.addHandler(handler)
 
-def handle_file(logger, filename, fmt, rotating=False, maxbytes=0, backups=0):
+def handle_file(logger, filename, fmt, rotating=False,
+                compressed_rotation=False, maxbytes=0, backups=0):
     if filename == 'syslog':
         handler = SyslogHandler()
 
@@ -387,7 +406,8 @@ def handle_file(logger, filename, fmt, rotating=False, maxbytes=0, backups=0):
         if rotating is False:
             handler = FileHandler(filename)
         else:
-            handler = RotatingFileHandler(filename, 'a', maxbytes, backups)
+            handler = RotatingFileHandler(filename, 'a', maxbytes, backups,
+                                          compressed_rotation)
 
     handler.setFormat(fmt)
     handler.setLevel(logger.level)

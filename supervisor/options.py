@@ -858,8 +858,10 @@ class ServerOptions(Options):
         numprocs_start = integer(get(section, 'numprocs_start', 0))
         environment_str = get(section, 'environment', '', do_expand=False)
         stdout_cmaxbytes = byte_size(get(section,'stdout_capture_maxbytes','0'))
+        stdout_compressed_rotation = boolean(get(section, 'stdout_compressed_rotation', 'false'))
         stdout_events = boolean(get(section, 'stdout_events_enabled','false'))
         stderr_cmaxbytes = byte_size(get(section,'stderr_capture_maxbytes','0'))
+        stderr_compressed_rotation = boolean(get(section, 'stderr_compressed_rotation', 'false'))
         stderr_events = boolean(get(section, 'stderr_events_enabled','false'))
         serverurl = get(section, 'serverurl', None)
         if serverurl and serverurl.strip().upper() == 'AUTO':
@@ -927,6 +929,10 @@ class ServerOptions(Options):
                 maxbytes = byte_size(get(section, mb_key, '50MB'))
                 logfiles[mb_key] = maxbytes
 
+                cr_key = '%s_compressed_rotation' % k
+                compressed_rotation = boolean(get(section, cr_key, False))
+                logfiles[cr_key] = compressed_rotation
+
                 sy_key = '%s_syslog' % k
                 syslog = boolean(get(section, sy_key, False))
                 logfiles[sy_key] = syslog
@@ -954,12 +960,14 @@ class ServerOptions(Options):
                 stdout_events_enabled = stdout_events,
                 stdout_logfile_backups=logfiles['stdout_logfile_backups'],
                 stdout_logfile_maxbytes=logfiles['stdout_logfile_maxbytes'],
+                stdout_compressed_rotation=logfiles['stdout_compressed_rotation'],
                 stdout_syslog=logfiles['stdout_syslog'],
                 stderr_logfile=logfiles['stderr_logfile'],
                 stderr_capture_maxbytes = stderr_cmaxbytes,
                 stderr_events_enabled = stderr_events,
                 stderr_logfile_backups=logfiles['stderr_logfile_backups'],
                 stderr_logfile_maxbytes=logfiles['stderr_logfile_maxbytes'],
+                stderr_compressed_rotation=logfiles['stderr_compressed_rotation'],
                 stderr_syslog=logfiles['stderr_syslog'],
                 stopsignal=stopsignal,
                 stopwaitsecs=stopwaitsecs,
@@ -1390,6 +1398,7 @@ class ServerOptions(Options):
             self.logfile,
             format,
             rotating=True,
+            compressed_rotation=False,
             maxbytes=self.logfile_maxbytes,
             backups=self.logfile_backups,
         )
@@ -1714,10 +1723,10 @@ class ProcessConfig(Config):
         'autostart', 'autorestart', 'startsecs', 'startretries',
         'stdout_logfile', 'stdout_capture_maxbytes',
         'stdout_events_enabled', 'stdout_syslog',
-        'stdout_logfile_backups', 'stdout_logfile_maxbytes',
-        'stderr_logfile', 'stderr_capture_maxbytes',
-        'stderr_logfile_backups', 'stderr_logfile_maxbytes',
-        'stderr_events_enabled', 'stderr_syslog',
+        'stdout_logfile_backups', 'stdout_compressed_rotation',
+        'stdout_logfile_maxbytes', 'stderr_logfile', 'stderr_capture_maxbytes',
+        'stderr_logfile_backups', 'stderr_compressed_rotation',
+        'stderr_logfile_maxbytes', 'stderr_events_enabled', 'stderr_syslog',
         'stopsignal', 'stopwaitsecs', 'stopasgroup', 'killasgroup',
         'exitcodes', 'redirect_stderr' ]
     optional_param_names = [ 'environment', 'serverurl' ]

@@ -132,6 +132,7 @@ class POutputDispatcher(PDispatcher):
 
         maxbytes = getattr(config, '%s_logfile_maxbytes' % channel)
         backups = getattr(config, '%s_logfile_backups' % channel)
+        compressed_rotation = getattr(config, '%s_compressed_rotation' % channel)
         fmt = '%(message)s'
         if logfile == 'syslog':
             warnings.warn("Specifying 'syslog' for filename is deprecated. "
@@ -143,6 +144,7 @@ class POutputDispatcher(PDispatcher):
             fmt=fmt,
             rotating=not not maxbytes, # optimization
             maxbytes=maxbytes,
+            compressed_rotation=compressed_rotation,
             backups=backups)
 
         if getattr(config, '%s_syslog' % channel, False):
@@ -290,14 +292,15 @@ class PEventListenerDispatcher(PDispatcher):
         if logfile:
             maxbytes = getattr(process.config, '%s_logfile_maxbytes' % channel)
             backups = getattr(process.config, '%s_logfile_backups' % channel)
+            compressed_rotation = getattr(process.config, '%s_compressed_rotation' % channel)
             self.childlog = loggers.handle_file(
                 process.config.options.getLogger(),
                 logfile,
                 '%(message)s',
                 rotating=not not maxbytes, # optimization
                 maxbytes=maxbytes,
-                backups=backups,
-            )
+                compressed_rotation=compressed_rotation,
+                backups=backups)
 
     def removelogs(self):
         if self.childlog is not None:

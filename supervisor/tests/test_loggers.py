@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import errno
+import gzip
 import sys
 import unittest
 import tempfile
@@ -331,6 +332,17 @@ class RotatingFileHandlerTests(FileHandlerTests):
         inst = self._makeOne(self.filename)
         inst.maxBytes = 0
         self.assertEqual(inst.doRollover(), None)
+
+    def test_compression_rollover(self):
+        handler = self._makeOne(self.filename, maxBytes=10, backupCount=2,
+                                compressed_rotation=True)
+        record = self._makeLogRecord('a' * 11)
+        handler.emit(record) # Trigger rotation
+        self.assertTrue(os.path.exists(self.filename + '.1.gz'))
+        self.assertFalse(os.path.exists(self.filename + '.1'))
+
+        with gzip.open(self.filename + '.1.gz', 'r') as f:
+            self.assertEqual(f.read(), 'a' * 11)
 
 
 class BoundIOTests(unittest.TestCase):
